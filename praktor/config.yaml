@@ -7,8 +7,6 @@ init: false
 arch:
   - aarch64
   - amd64
-startup: application
-boot: auto
 # Praktor starts one Docker container per agent, so it needs the Docker API.
 # This only works with "Protection mode" turned off (see DOCS.md).
 docker_api: true
