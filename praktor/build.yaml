@@ -1,0 +1,7 @@
+build_from:
+  aarch64: "ghcr.io/home-assistant/aarch64-base:3.23"
+  amd64: "ghcr.io/home-assistant/amd64-base:3.23"
+args:
+  # Fork release with the Home Assistant support changes (gateway image tag
+  # and source tag for the agent image). Keep in sync with config.yaml version.
+  PRAKTOR_VERSION: "v0.9.12-ha.1"

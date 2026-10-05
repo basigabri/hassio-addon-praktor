@@ -1,0 +1,18 @@
+configuration:
+  telegram_token:
+    name: Telegram bot token
+    description: Token from @BotFather.
+  allowed_telegram_users:
+    name: Allowed Telegram users
+    description: Telegram user IDs that may use the bot. At least one is required; the first also receives scheduled task results.
+  web_password:
+    name: Web password
+    description: Password for Mission Control and the API (also used by the Home Assistant integration).
+  vault_passphrase:
+    name: Vault passphrase
+    description: Encrypts stored secrets. Use a long random value and don't change it later.
+  timezone:
+    name: Time zone
+    description: For scheduled tasks, e.g. Europe/Athens.
+network:
+  8080/tcp: Mission Control web UI and API

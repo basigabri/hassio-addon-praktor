@@ -1,0 +1,43 @@
+# Praktor configuration, created on first start. Edit it in the App's config
+# folder (/addon_configs/<id>_praktor/praktor.yaml); changes apply without a
+# restart. ${...} values come from the App options.
+# Full reference: https://github.com/basigabri/praktor/blob/main/config/praktor.example.yaml
+
+telegram:
+  token: "${PRAKTOR_TELEGRAM_TOKEN}"
+  allow_from: [${PRAKTOR_ALLOW_FROM}]   # App option "allowed_telegram_users"
+  main_chat_id: ${PRAKTOR_MAIN_CHAT_ID} # first allowed user
+
+defaults:
+  image: "praktor-agent:latest"         # built on this device at first start
+  model: "deepseek-chat"
+  max_running: 2
+  idle_timeout: 10m
+
+agents:
+  deepseek:
+    description: "Handles ALL messages by default. Always choose this agent."
+    workspace: deepseek
+    model: "deepseek-chat"
+    env:
+      ANTHROPIC_BASE_URL: "https://api.deepseek.com/anthropic"
+      ANTHROPIC_AUTH_TOKEN: "secret:deepseek-key"   # add in Mission Control → Secrets
+      ANTHROPIC_SMALL_FAST_MODEL: "deepseek-chat"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "deepseek-chat"
+  claude:
+    description: "Manual-only. NEVER choose this agent; the user calls it directly with @claude."
+    workspace: claude
+    model: "claude-sonnet-5"
+    env:
+      CLAUDE_CODE_OAUTH_TOKEN: "secret:claude-oauth" # add in Mission Control → Secrets
+
+router:
+  default_agent: deepseek
+
+web:
+  enabled: true
+  port: 8080
+  auth: "${PRAKTOR_WEB_PASSWORD}"
+
+vault:
+  passphrase: "${PRAKTOR_VAULT_PASSPHRASE}"

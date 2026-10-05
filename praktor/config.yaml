@@ -1,0 +1,34 @@
+name: "Praktor"
+description: "Personal multi-agent AI assistant: Claude Code agents in isolated containers, reachable from Telegram and Home Assistant Assist."
+url: "https://github.com/basigabri/hassio-addon-praktor/tree/main/praktor"
+version: "0.9.12-ha.1"
+slug: "praktor"
+init: false
+arch:
+  - aarch64
+  - amd64
+startup: application
+boot: auto
+# Praktor starts one Docker container per agent, so it needs the Docker API.
+# This only works with "Protection mode" turned off (see DOCS.md).
+docker_api: true
+map:
+  - addon_config:rw
+ports:
+  8080/tcp: 8080
+ports_description:
+  8080/tcp: "Mission Control web UI and API"
+options:
+  telegram_token: ""
+  allowed_telegram_users: []
+  web_password: ""
+  vault_passphrase: ""
+  timezone: "UTC"
+schema:
+  telegram_token: password
+  allowed_telegram_users:
+    - int
+  web_password: password
+  vault_passphrase: password
+  timezone: str
+image: "ghcr.io/basigabri/{arch}-addon-praktor"
