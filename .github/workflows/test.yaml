@@ -1,0 +1,78 @@
+name: Test
+
+# Lints the App, tries to break run.sh with stubs, and starts the real App
+# image the way the Supervisor does.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      praktor_ref:
+        description: Praktor branch, tag or commit for the gateway and the agent sources
+        required: false
+
+permissions:
+  contents: read
+
+env:
+  # The fork release the App ships (build.yaml) may not be published yet, so
+  # the smoke test builds the gateway from this ref of the fork. It needs the
+  # self-attach change; switch to the release tag once it exists.
+  PRAKTOR_REF: ${{ inputs.praktor_ref || 'feat/self-attach-network' }}
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: shellcheck
+        run: shellcheck praktor/run.sh tests/*.sh
+
+      - name: hadolint
+        uses: hadolint/hadolint-action@v3.5.0
+        with:
+          dockerfile: praktor/Dockerfile
+
+      - name: App config (config.yaml, build.yaml)
+        uses: frenck/action-addon-linter@v2.21.1
+        with:
+          path: ./praktor
+
+      - name: fake Supervisor compiles
+        run: python3 -m py_compile tests/fake_supervisor.py
+
+  run-sh:
+    name: run.sh behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - run: tests/run_sh_test.sh
+
+  smoke:
+    name: Supervisor-like smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build the gateway image from ${{ env.PRAKTOR_REF }}
+        run: docker build -q -t praktor-gateway:ci --build-arg VERSION=ci "https://github.com/basigabri/praktor.git#${PRAKTOR_REF}"
+
+      - name: Smoke test
+        run: tests/smoke.sh
+        env:
+          GATEWAY_IMAGE: praktor-gateway:ci
+          PRAKTOR_SRC_URL: https://github.com/basigabri/praktor/archive/${{ env.PRAKTOR_REF }}.tar.gz
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-logs
+          path: tests/logs/
+          if-no-files-found: ignore
