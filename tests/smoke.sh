@@ -162,7 +162,7 @@ wait_log() { # PATTERN TIMEOUT
 	done
 }
 
-VALID='{"telegram_token":"123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","allowed_telegram_users":[111111],"web_password":"smoke-pass","vault_passphrase":"smoke-vault","timezone":"Europe/Athens"}'
+VALID='{"telegram_token":"123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","allowed_telegram_users":[111111],"web_password":"smoke-pass","vault_passphrase":"smoke-vault","timezone":"Europe/Athens"}' # gitleaks:allow (fake test token)
 
 log "starting the App with valid options"
 start_app "$VALID"
