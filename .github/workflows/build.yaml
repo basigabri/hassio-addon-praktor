@@ -49,8 +49,10 @@ jobs:
             echo "praktor_version=$(yq -r .args.PRAKTOR_VERSION praktor/build.yaml)"
             echo "gateway_ref=$(yq -r .args.PRAKTOR_GATEWAY_REF praktor/build.yaml)"
             echo "src_sha256=$(yq -r .args.PRAKTOR_SRC_SHA256 praktor/build.yaml)"
-            echo "from_amd64=$(yq -r .build_from.amd64 praktor/build.yaml)"
-            echo "from_aarch64=$(yq -r .build_from.aarch64 praktor/build.yaml)"
+            echo "from_amd64=$(yq -r .args.BASE_IMAGE_AMD64 praktor/build.yaml)"
+            echo "from_aarch64=$(yq -r .args.BASE_IMAGE_AARCH64 praktor/build.yaml)"
+            echo "tag_amd64=$(yq -r .build_from.amd64 praktor/build.yaml)"
+            echo "tag_aarch64=$(yq -r .build_from.aarch64 praktor/build.yaml)"
           } >> "$GITHUB_OUTPUT"
 
       - name: Require pinned inputs
@@ -59,10 +61,14 @@ jobs:
           SRC_SHA256: ${{ steps.info.outputs.src_sha256 }}
           FROM_AMD64: ${{ steps.info.outputs.from_amd64 }}
           FROM_AARCH64: ${{ steps.info.outputs.from_aarch64 }}
+          TAG_AMD64: ${{ steps.info.outputs.tag_amd64 }}
+          TAG_AARCH64: ${{ steps.info.outputs.tag_aarch64 }}
         run: |
           for ref in "$GATEWAY_REF" "$FROM_AMD64" "$FROM_AARCH64"; do
             [[ $ref =~ @sha256:[0-9a-f]{64}$ ]] || { echo "::error::not pinned by digest: $ref"; exit 1; }
           done
+          [[ ${FROM_AMD64%@*} == "$TAG_AMD64" && ${FROM_AARCH64%@*} == "$TAG_AARCH64" ]] ||
+            { echo "::error::BASE_IMAGE_* args don't match build_from"; exit 1; }
           [[ $SRC_SHA256 =~ ^[0-9a-f]{64}$ ]] || { echo "::error::PRAKTOR_SRC_SHA256 is not a SHA-256"; exit 1; }
 
       - name: Get build matrix

@@ -1,10 +1,15 @@
 # Every input is pinned: base images by digest, the gateway by digest (its
 # cosign signature is verified in CI before building), the agent sources by
 # SHA-256. A tag can be moved to a different image; a digest can't.
+# Plain tags here: the App config schema doesn't allow digests. CI builds
+# from the digest-pinned BASE_IMAGE_* args below and refuses to build if they
+# aren't pinned or don't match these tags.
 build_from:
-  aarch64: "ghcr.io/home-assistant/aarch64-base:3.23@sha256:cf5c30dfe0f911054aba9486c329b3e6490cae8baa77218e0809df63e7333334"
-  amd64: "ghcr.io/home-assistant/amd64-base:3.23@sha256:93a0b0c8e177f8b1fd896ea69aa0b4f682b4072dfe9c6bbdfd9e29fdd2c133e3"
+  aarch64: "ghcr.io/home-assistant/aarch64-base:3.23"
+  amd64: "ghcr.io/home-assistant/amd64-base:3.23"
 args:
+  BASE_IMAGE_AARCH64: "ghcr.io/home-assistant/aarch64-base:3.23@sha256:cf5c30dfe0f911054aba9486c329b3e6490cae8baa77218e0809df63e7333334"
+  BASE_IMAGE_AMD64: "ghcr.io/home-assistant/amd64-base:3.23@sha256:93a0b0c8e177f8b1fd896ea69aa0b4f682b4072dfe9c6bbdfd9e29fdd2c133e3"
   # Fork release with the Home Assistant support changes. Keep in sync with
   # the version in config.yaml.
   PRAKTOR_VERSION: "v0.9.12-ha.1"

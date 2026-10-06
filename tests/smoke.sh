@@ -59,7 +59,9 @@ amd64) arch=amd64 ;;
 arm64) arch=aarch64 ;;
 *) fail "unsupported daemon arch" ;;
 esac
-BUILD_FROM=$(sed -n "s/^ *${arch}: *\"\(.*\)\"/\1/p" "$REPO/praktor/build.yaml")
+# The digest-pinned base image, as CI builds it.
+BUILD_FROM=$(sed -n "s/^ *BASE_IMAGE_${arch^^}: *\"\(.*\)\"/\1/p" "$REPO/praktor/build.yaml")
+[[ $BUILD_FROM == *@sha256:* ]] || fail "no digest-pinned BASE_IMAGE_${arch^^} in build.yaml"
 
 purge() {
 	{
@@ -136,6 +138,13 @@ start_app() {
 	docker cp "$REPO/tests/fake_supervisor.py" $SUP:/fake_supervisor.py >/dev/null
 	docker cp "$OPTS_DIR/options.json" $SUP:/options.json >/dev/null
 	docker start $SUP >/dev/null
+	# Wait until the fake Supervisor answers, or the App races it at startup.
+	local i
+	for i in $(seq 50); do
+		docker exec $SUP python3 -c 'import socket; socket.create_connection(("127.0.0.1", 80), 1)' 2>/dev/null && break
+		((i == 50)) && fail "fake Supervisor did not start"
+		sleep 0.2
+	done
 	docker run -d --name $APP --hostname $HOST --network $NET \
 		-p "127.0.0.1:${PORT}:8080" \
 		-e SUPERVISOR_TOKEN=$TOKEN \
