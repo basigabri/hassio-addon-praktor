@@ -1,10 +1,14 @@
 # Praktor configuration, created on first start. Edit it in the App's config
 # folder (/addon_configs/<id>_praktor/praktor.yaml); changes apply without a
 # restart. ${...} values come from the App options.
+#
+# Secrets (bot token, web password, chat token, vault passphrase) are not in
+# this file: the App passes them as environment variables, which Praktor
+# reads directly. Putting them here as "${VAR}" would break the YAML when a
+# value contains a quote or backslash.
 # Full reference: https://github.com/basigabri/praktor/blob/main/config/praktor.example.yaml
 
 telegram:
-  token: "${PRAKTOR_TELEGRAM_TOKEN}"
   allow_from: [${PRAKTOR_ALLOW_FROM}]   # App option "allowed_telegram_users"
   main_chat_id: ${PRAKTOR_MAIN_CHAT_ID} # first allowed user
 
@@ -37,7 +41,6 @@ router:
 web:
   enabled: true
   port: 8080
-  auth: "${PRAKTOR_WEB_PASSWORD}"
-
-vault:
-  passphrase: "${PRAKTOR_VAULT_PASSPHRASE}"
+  # Agents the Home Assistant integration (chat token) may reach; the first
+  # is the default. Only Claude: Assist text is never sent to DeepSeek.
+  chat_agents: [claude]

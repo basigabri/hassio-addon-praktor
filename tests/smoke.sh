@@ -13,12 +13,16 @@
 #   PRAKTOR_SRC_URL agent sources tarball (default: the fork's main branch)
 #   SMOKE_STRICT=1  fail on known bugs instead of reporting them
 #   SMOKE_LOG_DIR   where logs go (default tests/logs)
+#   PRAKTOR_SRC_SHA256  checksum of PRAKTOR_SRC_URL (default: computed)
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 LOG_DIR=${SMOKE_LOG_DIR:-$REPO/tests/logs}
 GATEWAY_IMAGE=${GATEWAY_IMAGE:-praktor-gateway:ci}
 PRAKTOR_SRC_URL=${PRAKTOR_SRC_URL:-https://github.com/basigabri/praktor/archive/refs/heads/main.tar.gz}
+# The App's Dockerfile verifies the tarball's SHA-256. Releases pin it in
+# build.yaml; for a branch tarball the test computes it here.
+SRC_SHA256=${PRAKTOR_SRC_SHA256:-$(curl -fsSL "$PRAKTOR_SRC_URL" | sha256sum | cut -d' ' -f1)}
 PORT=${SMOKE_PORT:-18090}
 API="http://127.0.0.1:${PORT}"
 
@@ -100,21 +104,14 @@ build_app() {
 	docker build -t $IMG \
 		--build-arg BUILD_FROM="$BUILD_FROM" \
 		--build-arg PRAKTOR_VERSION="$VERSION" \
-		--build-arg PRAKTOR_IMAGE="${GATEWAY_IMAGE%:*}" \
+		--build-arg PRAKTOR_GATEWAY_REF="$GATEWAY_IMAGE" \
 		--build-arg PRAKTOR_SRC_URL="$PRAKTOR_SRC_URL" \
+		--build-arg PRAKTOR_SRC_SHA256="$SRC_SHA256" \
 		"$CTX" >"$LOG_DIR/app-build.log" 2>&1
 }
 log "building the App image ($arch, gateway $GATEWAY_IMAGE)"
-if ! build_app; then
-	grep -q 'unrecognized option: wildcards' "$LOG_DIR/app-build.log" ||
-		fail "App image build failed: $(tail -5 "$LOG_DIR/app-build.log")"
-	known_bug "the App image doesn't build: the base image's tar is busybox, which has no --wildcards (Dockerfile: tar -xzf ... --wildcards). Fix: add GNU tar to the apk add line"
-	log "continuing with GNU tar added to the image"
-	patch_ctx
-	sed -i.bak 's/^RUN apk add --no-cache docker-cli docker-cli-buildx$/& tar/' "$CTX/Dockerfile"
-	build_app || fail "App image build failed: $(tail -5 "$LOG_DIR/app-build.log")"
-fi
-pass "App image builds with BUILD_FROM/PRAKTOR_VERSION/PRAKTOR_IMAGE/PRAKTOR_SRC_URL"
+build_app || fail "App image build failed: $(tail -5 "$LOG_DIR/app-build.log")"
+pass "App image builds with BUILD_FROM/PRAKTOR_GATEWAY_REF/PRAKTOR_SRC_URL and a verified source checksum"
 docker run --rm --entrypoint sh $IMG -c 'test -x /usr/bin/praktor && test -f /opt/praktor-agent/Dockerfile.agent && test -d /opt/praktor-agent/agent-runner && docker --version' >/dev/null ||
 	fail "App image is missing the gateway, the agent sources or docker-cli"
 pass "App image has the gateway, the agent sources and docker-cli"
@@ -160,21 +157,7 @@ VALID='{"telegram_token":"123456789:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA","allowe
 
 log "starting the App with valid options"
 start_app "$VALID"
-if ! wait_log 'Starting Praktor' 60; then
-	if app_logs | grep -q 'needs at least one Telegram user ID'; then
-		known_bug "the App refuses valid allowed_telegram_users (run.sh reads the list through process substitution; see tests/run_sh_test.sh)"
-		log "continuing with run.sh's allow-list line fixed"
-		patch_ctx
-		awk '$0 == "mapfile -t allowed < <(bashio::config '"'"'allowed_telegram_users'"'"')" {
-			print "allowed_list=$(bashio::config '"'"'allowed_telegram_users'"'"'); mapfile -t allowed <<<\"${allowed_list}\""; next } { print }' \
-			"$REPO/praktor/run.sh" >"$CTX/run.sh"
-		build_app || fail "App image build failed: $(tail -5 "$LOG_DIR/app-build.log")"
-		start_app "$VALID"
-		wait_log 'Starting Praktor' 60 || fail "the App did not start: $(app_logs | tail -5)"
-	else
-		fail "the App did not start: $(app_logs | tail -5)"
-	fi
-fi
+wait_log 'Starting Praktor' 60 || fail "the App did not start: $(app_logs | tail -5)"
 pass "run.sh starts the gateway"
 app_logs | grep -q "First start: creating /config/praktor.yaml" || fail "no first-start message"
 app_logs | grep -q "Home Assistant integration URL: http://$HOST:8080" || fail "no integration URL with the App hostname"
@@ -207,13 +190,24 @@ log "a web_password with a double quote"
 docker rm -f $APP >/dev/null
 docker volume rm -f $CFG_VOL >/dev/null # first start again, so the default config is used
 start_app "$(jq -c '.web_password = "pa\"ss"' <<<"$VALID")"
-if wait_log 'web server listening' 60; then
-	pass "a password with a double quote works"
-elif app_logs | grep -q 'parse config'; then
-	known_bug "a web_password or vault_passphrase containing \" or \\ stops the gateway at startup: praktor.default.yaml puts them in the YAML as \"\${VAR}\" and Praktor expands env vars in the raw file ($(app_logs | grep -m1 'parse config'))"
-else
-	fail "unexpected startup failure: $(app_logs | tail -5)"
-fi
+wait_log 'web server listening' 60 || fail "a password with a double quote stopped the gateway: $(app_logs | tail -5)"
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -u 'x:pa"ss' "$API/api/status") == 200 ]] || fail "the password with a double quote doesn't log in"
+pass "a password with a double quote works"
+
+log "the chat token grants /api/chat only"
+docker rm -f $APP >/dev/null
+CHAT_TOKEN=smoke-chat-token-0123456789abcdef0123456789
+start_app "$(jq -c --arg t "$CHAT_TOKEN" '.chat_token = $t' <<<"$VALID")"
+wait_log 'web server listening' 60 || fail "gateway did not start with a chat_token: $(app_logs | tail -5)"
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CHAT_TOKEN" "$API/api/status") == 401 ]] || fail "the chat token opened /api/status"
+[[ $(curl -sS -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $CHAT_TOKEN" -H 'Content-Type: application/json' \
+	--data '{"message":"hi","agent":"deepseek"}' "$API/api/chat") == 403 ]] || fail "the chat token reached deepseek (chat_agents is [claude])"
+pass "the chat token is limited to /api/chat and chat_agents"
+docker rm -f $APP >/dev/null
+start_app "$(jq -c '.chat_token = "short"' <<<"$VALID")"
+sleep 5
+app_logs | grep -q "must be at least 32 characters" || fail "a short chat_token was accepted"
+pass "a short chat_token is refused"
 
 if app_logs | grep -Eq 'panic:|http: panic serving'; then fail "gateway panicked"; fi
 pass "no panics"

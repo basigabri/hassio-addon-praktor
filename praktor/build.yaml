@@ -1,7 +1,15 @@
+# Every input is pinned: base images by digest, the gateway by digest (its
+# cosign signature is verified in CI before building), the agent sources by
+# SHA-256. A tag can be moved to a different image; a digest can't.
 build_from:
-  aarch64: "ghcr.io/home-assistant/aarch64-base:3.23"
-  amd64: "ghcr.io/home-assistant/amd64-base:3.23"
+  aarch64: "ghcr.io/home-assistant/aarch64-base:3.23@sha256:cf5c30dfe0f911054aba9486c329b3e6490cae8baa77218e0809df63e7333334"
+  amd64: "ghcr.io/home-assistant/amd64-base:3.23@sha256:93a0b0c8e177f8b1fd896ea69aa0b4f682b4072dfe9c6bbdfd9e29fdd2c133e3"
 args:
-  # Fork release with the Home Assistant support changes (gateway image tag
-  # and source tag for the agent image). Keep in sync with config.yaml version.
+  # Fork release with the Home Assistant support changes. Keep in sync with
+  # the version in config.yaml.
   PRAKTOR_VERSION: "v0.9.12-ha.1"
+  # Filled in from the fork's release workflow summary once v0.9.12-ha.1 is
+  # published; the build fails until then (fail closed).
+  PRAKTOR_GATEWAY_REF: "ghcr.io/basigabri/praktor@sha256:PENDING_RELEASE"
+  # sha256 of https://github.com/basigabri/praktor/archive/refs/tags/<PRAKTOR_VERSION>.tar.gz
+  PRAKTOR_SRC_SHA256: "PENDING_RELEASE"

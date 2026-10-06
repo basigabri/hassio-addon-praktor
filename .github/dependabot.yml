@@ -1,0 +1,13 @@
+# Proposes updates for the pinned actions (commit SHAs) and the Dockerfile.
+# Base images and the gateway are pinned in praktor/build.yaml, which
+# Dependabot doesn't read: update those by hand after verifying them.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+  - package-ecosystem: "docker"
+    directory: "/praktor"
+    schedule:
+      interval: "weekly"

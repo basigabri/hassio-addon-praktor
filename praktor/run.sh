@@ -11,7 +11,10 @@ for opt in telegram_token web_password vault_passphrase; do
         bashio::exit.nok "Option '${opt}' is required. Set it on the Configuration tab."
     fi
 done
-mapfile -t allowed < <(bashio::config 'allowed_telegram_users')
+# Not `mapfile < <(bashio::config ...)`: bashio's read returns 1 at the end of
+# its input, and errexit in the process substitution empties the list.
+allowed_list="$(bashio::config 'allowed_telegram_users')"
+mapfile -t allowed <<<"${allowed_list}"
 if [[ ${#allowed[@]} -eq 0 || -z "${allowed[0]}" ]]; then
     # An empty allow list lets anyone who finds the bot run your agents.
     bashio::exit.nok "Option 'allowed_telegram_users' needs at least one Telegram user ID."
@@ -25,6 +28,14 @@ PRAKTOR_MAIN_CHAT_ID="${allowed[0]}"
 TZ="$(bashio::config 'timezone')"
 export PRAKTOR_TELEGRAM_TOKEN PRAKTOR_WEB_PASSWORD PRAKTOR_VAULT_PASSPHRASE \
     PRAKTOR_ALLOW_FROM PRAKTOR_MAIN_CHAT_ID TZ
+# Bearer token for the Home Assistant integration: grants POST /api/chat only.
+if bashio::config.has_value 'chat_token'; then
+    PRAKTOR_CHAT_TOKEN="$(bashio::config 'chat_token')"
+    if [[ ${#PRAKTOR_CHAT_TOKEN} -lt 32 ]]; then
+        bashio::exit.nok "Option 'chat_token' must be at least 32 characters (e.g. openssl rand -hex 32)."
+    fi
+    export PRAKTOR_CHAT_TOKEN
+fi
 export PRAKTOR_CONFIG="${config_file}"
 export DOCKER_HOST="unix:///run/docker.sock"
 

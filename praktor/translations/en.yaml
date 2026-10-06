@@ -7,7 +7,10 @@ configuration:
     description: Telegram user IDs that may use the bot. At least one is required; the first also receives scheduled task results.
   web_password:
     name: Web password
-    description: Password for Mission Control and the API (also used by the Home Assistant integration).
+    description: Admin password for Mission Control and the API. Use a long random value.
+  chat_token:
+    name: Chat token
+    description: For the Home Assistant integration. At least 32 characters (openssl rand -hex 32). Grants chat with the agents in web.chat_agents only.
   vault_passphrase:
     name: Vault passphrase
     description: Encrypts stored secrets. Use a long random value and don't change it later.
@@ -15,4 +18,4 @@ configuration:
     name: Time zone
     description: For scheduled tasks, e.g. Europe/Athens.
 network:
-  8080/tcp: Mission Control web UI and API
+  8080/tcp: Mission Control web UI and API (closed by default; LAN only)

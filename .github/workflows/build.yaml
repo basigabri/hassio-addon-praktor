@@ -2,7 +2,11 @@ name: Build
 
 # Pull requests build the App image without pushing. Pushes to main build and
 # push ghcr.io/<owner>/{arch}-addon-praktor:<version> (from praktor/config.yaml),
-# skipping versions that already exist.
+# skipping versions that already exist. The HA builder signs the images with
+# cosign (keyless).
+#
+# Before building, the pinned Praktor gateway image is verified: its cosign
+# signature must come from the fork's tag-triggered release workflow.
 
 on:
   push:
@@ -16,31 +20,54 @@ env:
   ARCHITECTURES: '["amd64", "aarch64"]'
   IMAGE_NAME: addon-praktor
 
-permissions:
-  contents: read
+permissions: {}
 
 jobs:
   init:
     name: Initialize build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
       version: ${{ steps.info.outputs.version }}
       praktor_version: ${{ steps.info.outputs.praktor_version }}
-      base_tag: ${{ steps.info.outputs.base_tag }}
+      gateway_ref: ${{ steps.info.outputs.gateway_ref }}
+      src_sha256: ${{ steps.info.outputs.src_sha256 }}
+      from_amd64: ${{ steps.info.outputs.from_amd64 }}
+      from_aarch64: ${{ steps.info.outputs.from_aarch64 }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Read App info
         id: info
         run: |
-          echo "version=$(yq -r .version praktor/config.yaml)" >> "$GITHUB_OUTPUT"
-          echo "praktor_version=$(yq -r .args.PRAKTOR_VERSION praktor/build.yaml)" >> "$GITHUB_OUTPUT"
-          echo "base_tag=$(yq -r .build_from.amd64 praktor/build.yaml | cut -d: -f2)" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$(yq -r .version praktor/config.yaml)"
+            echo "praktor_version=$(yq -r .args.PRAKTOR_VERSION praktor/build.yaml)"
+            echo "gateway_ref=$(yq -r .args.PRAKTOR_GATEWAY_REF praktor/build.yaml)"
+            echo "src_sha256=$(yq -r .args.PRAKTOR_SRC_SHA256 praktor/build.yaml)"
+            echo "from_amd64=$(yq -r .build_from.amd64 praktor/build.yaml)"
+            echo "from_aarch64=$(yq -r .build_from.aarch64 praktor/build.yaml)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Require pinned inputs
+        env:
+          GATEWAY_REF: ${{ steps.info.outputs.gateway_ref }}
+          SRC_SHA256: ${{ steps.info.outputs.src_sha256 }}
+          FROM_AMD64: ${{ steps.info.outputs.from_amd64 }}
+          FROM_AARCH64: ${{ steps.info.outputs.from_aarch64 }}
+        run: |
+          for ref in "$GATEWAY_REF" "$FROM_AMD64" "$FROM_AARCH64"; do
+            [[ $ref =~ @sha256:[0-9a-f]{64}$ ]] || { echo "::error::not pinned by digest: $ref"; exit 1; }
+          done
+          [[ $SRC_SHA256 =~ ^[0-9a-f]{64}$ ]] || { echo "::error::PRAKTOR_SRC_SHA256 is not a SHA-256"; exit 1; }
 
       - name: Get build matrix
         id: matrix
-        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@2026.09.0
+        uses: home-assistant/builder/actions/prepare-multi-arch-matrix@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           architectures: ${{ env.ARCHITECTURES }}
           image-name: ${{ env.IMAGE_NAME }}
@@ -57,16 +84,30 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.init.outputs.matrix) }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Verify the Praktor gateway image signature
+        env:
+          GATEWAY_REF: ${{ needs.init.outputs.gateway_ref }}
+        run: |
+          cosign verify "${GATEWAY_REF}" \
+            --certificate-identity-regexp '^https://github\.com/basigabri/praktor/\.github/workflows/build\.yml@refs/tags/v' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com > /dev/null
 
       - name: Build image
-        uses: home-assistant/builder/actions/build-image@2026.09.0
+        uses: home-assistant/builder/actions/build-image@7412f0023ea9b6e58e8bb5059f1660f51376f49a # 2026.09.0
         with:
           arch: ${{ matrix.arch }}
           context: praktor
           build-args: |
-            BUILD_FROM=ghcr.io/home-assistant/${{ matrix.arch }}-base:${{ needs.init.outputs.base_tag }}
+            BUILD_FROM=${{ matrix.arch == 'amd64' && needs.init.outputs.from_amd64 || needs.init.outputs.from_aarch64 }}
             PRAKTOR_VERSION=${{ needs.init.outputs.praktor_version }}
+            PRAKTOR_GATEWAY_REF=${{ needs.init.outputs.gateway_ref }}
+            PRAKTOR_SRC_SHA256=${{ needs.init.outputs.src_sha256 }}
           container-registry-password: ${{ secrets.GITHUB_TOKEN }}
           image: ${{ matrix.image }}
           image-tags: |

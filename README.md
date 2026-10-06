@@ -17,9 +17,18 @@ Then install **Praktor** and follow its Documentation tab.
 The App uses [basigabri/praktor](https://github.com/basigabri/praktor), upstream Praktor plus two changes needed for Home Assistant. Both are proposed upstream:
 
 - **The gateway joins the agent network itself.** Agents reach the gateway over a Docker network that Docker Compose sets up. A Home Assistant App isn't started by Compose, so without this change the agents couldn't connect.
-- **`POST /api/chat`.** Lets the Home Assistant integration send a message to an agent and get the reply.
+- **`POST /api/chat`** with a chat-only token. Lets the Home Assistant integration send a message to an agent and get the reply, without holding the admin password.
 
 Once upstream has both, the App will switch to upstream images.
+
+## Security
+
+- **Pinned inputs:**
+  - App images are built by GitHub Actions from pinned inputs: base images and the Praktor gateway by digest, agent sources and Claude Code by SHA-256, actions by commit SHA.
+  - The gateway's cosign signature is verified before every build.
+  - App images are signed with cosign.
+- **Docker access:** the App needs Protection mode off (Docker access). Read the Documentation tab before installing.
+- **Device control:** agents get no control over Home Assistant devices in this version.
 
 ## Images
 

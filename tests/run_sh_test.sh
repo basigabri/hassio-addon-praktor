@@ -73,19 +73,12 @@ EOF
 # doesn't inherit errexit, so reading the list with $(...) works.
 # Until run.sh is fixed, the other cases run a copy with that one line
 # replaced (a no-op once the line is fixed), so they still test the rest.
-ALLOWED_LINE="mapfile -t allowed < <(bashio::config 'allowed_telegram_users')"
-ALLOWED_FIX="allowed_list=\$(bashio::config 'allowed_telegram_users'); mapfile -t allowed <<<\"\${allowed_list}\""
-PATCH_ALLOWED=1
 
 # reset OPTIONS_JSON: fresh filesystem state for one case.
 reset() {
 	rm -rf /config /opt/praktor /opt/praktor-agent /tmp/.bashio "$STUB" /tmp/pwned*
 	mkdir -p /config /opt/praktor /opt/praktor-agent /tmp/.bashio "$STUB"
 	cp /repo/praktor/run.sh /run.sh
-	if ((PATCH_ALLOWED)); then
-		local line=$ALLOWED_LINE fix=$ALLOWED_FIX
-		awk -v line="$line" -v fix="$fix" '$0 == line { print fix; next } { print }' /repo/praktor/run.sh >/run.sh
-	fi
 	cp /repo/praktor/praktor.default.yaml /opt/praktor/praktor.default.yaml
 	echo "FROM scratch" >/opt/praktor-agent/Dockerfile.agent
 	printf '%s' "$1" >/tmp/.bashio/addons.self.options.config.cache
@@ -133,16 +126,12 @@ setup_stubs
 
 # --- the allow list, with run.sh as it is ----------------------------------------
 
-PATCH_ALLOWED=0
 reset "$VALID"
 start
-PATCH_ALLOWED=1
 if ((RC == 0)) && started; then
-	ok "valid allowed_telegram_users are read (run.sh unmodified)"
-elif [[ -n ${RUN_KNOWN_BUGS:-} ]]; then
-	not_ok "valid allowed_telegram_users are read (run.sh unmodified)"
+	ok "valid allowed_telegram_users are read"
 else
-	known_bug "run.sh never starts: 'mapfile -t allowed < <(bashio::config ...)' reads an empty list under real bashio (errexit in process substitution + bashio's read -d ''), so every allow list is refused. Fix: allowed_list=\$(bashio::config 'allowed_telegram_users'); mapfile -t allowed <<<\"\${allowed_list}\""
+	not_ok "valid allowed_telegram_users are read"
 fi
 
 # --- happy path ---------------------------------------------------------------

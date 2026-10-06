@@ -12,14 +12,17 @@ arch:
 docker_api: true
 map:
   - addon_config:rw
+# Not published by default: Home Assistant reaches Praktor over the internal
+# network. Set a port on the Network tab to open Mission Control on your LAN.
 ports:
-  8080/tcp: 8080
+  8080/tcp: null
 ports_description:
-  8080/tcp: "Mission Control web UI and API"
+  8080/tcp: "Mission Control web UI and API (LAN)"
 options:
   telegram_token: ""
   allowed_telegram_users: []
   web_password: ""
+  chat_token: ""
   vault_passphrase: ""
   timezone: "UTC"
 schema:
@@ -27,6 +30,7 @@ schema:
   allowed_telegram_users:
     - int
   web_password: password
+  chat_token: password?
   vault_passphrase: password
   timezone: str
 image: "ghcr.io/basigabri/{arch}-addon-praktor"
